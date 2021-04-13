@@ -11,14 +11,23 @@
 -Таблица keywords для хранения списка подписок на ключевые слова для каждого пользователя.
 
 
+ bot = telebot.TeleBot("1629080631:AAGJUScNV0kLMcLoges2Frj1xJRhSG6pHzk", parse_mode=None)
+
+ @bot.message_handler(commands=['start', 'help'])
+ def handle_start_help(message):
+     bot.reply_to(message, "Я пока ничего не умею?")
+
+ @bot.message_handler(func=lambda message: True)
+ def answer_to_message(message):
+     print(message.from_user.id)
+     if message.text in list_hello:
+         bot.send_message(message.from_user.id, "И тебе привет!")
+ bot.polling()
 '''
+import sqlite3, telebot,requests
+from newsapi import NewsApiClient
 
-import sqlite3
-import telebot
-import requests
-#from telebot import types
-
-def connectToDB():
+def initDB():
     """Подключение к БД и создание таблиц"""
     try:
         sqlConn = sqlite3.connect('newsBot.db')
@@ -65,17 +74,47 @@ def connectToDB():
             sqlConn.close()
             print("Соединение с SQLite закрыто")
 
+
+#registration
+def regNewUser(userId = 124023217):
+    print ('Заглушка', userId)
+
+
 #def getNews(userID,categories="дтп",domains="yandex.ru"):
-def getNews(categories="Рос", domains="yandex.ru"):
+def getNews(keyWord="Рос", domains="yandex.ru"):
+    #get all sources of news support country/category
+    #https://newsapi.org/v2/sources?apiKey=<api_key>&q=Россия&country=ru&language=ru
+    #https://newsapi.org/v2/sources?apiKey=7e40013ca7ea498589545453e4cea074&q=Россия&country=ru&language=ru
+    #everything
+    #https://newsapi.org/v2/everything?apiKey=<api_key>&q=Россия&country=ru&language=ru
+
+
+    #status string
+    #If the request was successful or not. Options: ok, error. In the case of error a code and message property will be populated.
+
+    # Init
+    newsapi = NewsApiClient(api_key='7e40013ca7ea498589545453e4cea074')
+    #get sources
+    sources = newsapi.get_sources()
+    print("src:",sources)
+
+    top_headlines = newsapi.get_top_headlines( #q='bitcoin',
+                                              sources='abc-news',
+                                              #category='business',
+                                              language='en')
+                                              #country='us')Ы
+
     newsList = []
-    apiKey = "7e40013ca7ea498589545453e4cea074"
+
+    #apiKey = "7e40013ca7ea498589545453e4cea074"
     #categories = "Россия"
     #domains = "yandex.ru"
-    requestNews = f"https://newsapi.org/v2/everything?q={categories}&domains={domains}&sortBy=publishedAt&apiKey={apiKey}"
-    print(requestNews)
-    response = requests.get(requestNews)
-    response = response.json()
+    #requestNews = f"https://newsapi.org/v2/everything?q={categories}&domains={domains}&sortBy=publishedAt&apiKey={apiKey}"
+    #print(requestNews)
+    #response = requests.get(requestNews)
+    #response = response.json()
 
+    '''
     #only top10
     if len(response["articles"]) < 10:
         newsCount = len(response["articles"])
@@ -91,8 +130,22 @@ def getNews(categories="Рос", domains="yandex.ru"):
             "publishedAt": response["articles"][i]["publishedAt"],
             "content": response["articles"][i]["content"],
         })
-    return newsList
+    '''
+    #return newsList
+    print (top_headlines)
 
 
-connectToDB()
-print(getNews())
+categoryList=['business', 'entertainment', 'general', 'health', 'science', 'sports', 'technology']
+language = 'ru'
+country = 'ru'
+
+initDB()
+#authorization
+
+#bot = telebot.TeleBot("1700154841:AAEqEXDBhc4gZi02t4vttt6ZW5J6xKnYgPM", parse_mode=None)
+
+getNews()
+
+
+#start bot
+#bot.polling()

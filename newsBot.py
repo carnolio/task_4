@@ -24,13 +24,33 @@
          bot.send_message(message.from_user.id, "И тебе привет!")
  bot.polling()
 '''
-import sqlite3, telebot,requests
+import sqlite3, telebot, requests
 from newsapi import NewsApiClient
 
+botToken = "1700154841:AAEqEXDBhc4gZi02t4vttt6ZW5J6xKnYgPM"
+newsApiKey = "7e40013ca7ea498589545453e4cea074"
+carnolioId = "124023217"
+
+#pip3 install PyTelegramBotAPI
+bot = telebot.TeleBot(botToken, parse_mode = None)
+#bot = telebot.TeleBot(botToken)
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    msg = bot.reply_to(message, "Здравствуйте, представьтесь:")
-    bot.register_next_step_handler(msg, regNewUser)
+    if userExist():
+        msg = bot.reply_to(message, "Здравствуйте, представьтесь:")
+        bot.register_next_step_handler(msg, regNewUser)
+    else:
+        msg = bot.reply_to(message, "Здравствуйте, представьтесь:")
+        bot.register_next_step_handler(msg, regNewUser)
+
+@bot.message_handler(commands=['categories'])
+def get_categories(message):
+    msg = bot.reply_to(message, "Категории:")
+    msg = bot.reply_to(message, categoryList[1])
+    #bot.register_next_step_handler(msg, regNewUser)
+
+
+
     
 def initDB():
     """Подключение к БД и создание таблиц"""
@@ -77,16 +97,20 @@ def initDB():
             print("Соединение с SQLite закрыто")
 
 def addKeyword(message):
+    '''add keywords to user'''
     userId = message.from_user.id
-    keywords = message.text
+    keywords = message.text.split()
+    print(keywords)
+
     try:
         sqlConn = sqlite3.connect('newsBot.db')
         cursor = sqlConn.cursor()
-        sqlite_insert_with_param = """INSERT INTO keywords
-                                          (keywords, userId)
-                                          VALUES (?, ?);"""
+
+        sqlite_insert_with_param = "INSERT INTO keywords (name, user_Id) VALUES (?, ?);"
         data_tuple = (keywords, userId)
         cursor.execute(sqlite_insert_with_param, data_tuple)
+
+
         sqlConn.commit()
         print("Запись успешно вставлена в таблицу keywords ", cursor.rowcount)
         cursor.close()
@@ -98,6 +122,30 @@ def addKeyword(message):
             sqlConn.close()
             print("Соединение с SQLite закрыто")
 
+def addCategories(message):
+    '''add categories to user'''
+    userId = message.from_user.id
+    categoties = message.text
+    try:
+        sqlConn = sqlite3.connect('newsBot.db')
+        cursor = sqlConn.cursor()
+
+
+        sqlInsertCategory = "INSERT INTO categories (name, user_id) VALUES (?, ?);"
+        data_tuple = (category, userId)
+        cursor.execute(sqlInsertCategory, data_tuple)
+        sqlConn.commit()
+        print("Запись успешно вставлена в таблицу categories ", cursor.rowcount)
+        cursor.close()
+
+    except sqlite3.Error as error:
+        print("Ошибка при работе с SQLite", error)
+    finally:
+        if sqlConn:
+            sqlConn.close()
+            print("Соединение с SQLite закрыто")
+
+
 
 
 def regNewUser(message):
@@ -107,9 +155,7 @@ def regNewUser(message):
     try:
         sqlConn = sqlite3.connect('newsBot.db')
         cursor = sqlConn.cursor()
-        sqlInsertNewUser = """INSERT INTO users
-                                      (id, name)
-                                      VALUES (?, ?);"""
+        sqlInsertNewUser = """INSERT INTO users (id, name) VALUES (?, ?);"""
         params = (userId, name)
         cursor.execute(sqlInsertNewUser, params)
         sqlConn.commit()
@@ -128,8 +174,8 @@ def regNewUser(message):
 #def getNews(userID,categories="дтп",domains="yandex.ru"):
 def getNews(keyWord="Рос", domains="yandex.ru"):
     #get all sources of news support country/category
-    #https://newsapi.org/v2/sources?apiKey=<api_key>&q=Россия&country=ru&language=ru
-    #https://newsapi.org/v2/sources?apiKey=7e40013ca7ea498589545453e4cea074&q=Россия&country=ru&language=ru
+    #https://newsapi.org/v2/sources?apiKey=newsApiKey&q=Россия&country=ru&language=ru
+    #https://newsapi.org/v2/sources?apiKey=newsApiKey&q=Россия&country=ru&language=ru
     #everything
     #https://newsapi.org/v2/everything?apiKey=<api_key>&q=Россия&country=ru&language=ru
 
@@ -138,7 +184,7 @@ def getNews(keyWord="Рос", domains="yandex.ru"):
     #If the request was successful or not. Options: ok, error. In the case of error a code and message property will be populated.
 
     # Init
-    newsapi = NewsApiClient(api_key='7e40013ca7ea498589545453e4cea074')
+    newsapi = NewsApiClient(api_key=newsApiKey)
     #get sources
     sources = newsapi.get_sources()
     print("src:",sources)
@@ -187,10 +233,9 @@ country = 'ru'
 initDB()
 #authorization
 
-#bot = telebot.TeleBot("1700154841:AAEqEXDBhc4gZi02t4vttt6ZW5J6xKnYgPM", parse_mode=None)
 
 getNews()
 #regNewUser()
 
 #start bot
-#bot.polling()
+bot.polling()

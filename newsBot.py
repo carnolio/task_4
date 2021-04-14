@@ -27,13 +27,17 @@
 import sqlite3, telebot,requests
 from newsapi import NewsApiClient
 
+@bot.message_handler(commands=['start'])
+def start_message(message):
+    msg = bot.reply_to(message, "Здравствуйте, представьтесь:")
+    bot.register_next_step_handler(msg, regNewUser)
+    
 def initDB():
     """Подключение к БД и создание таблиц"""
     try:
         sqlConn = sqlite3.connect('newsBot.db')
         sqlCreateTableUsers = '''CREATE TABLE IF NOT EXISTS "users" (
                                     "id"	INTEGER NOT NULL,
-                                    "telegram_id"	INTEGER NOT NULL,
                                     "name"	TEXT NOT NULL,
                                     PRIMARY KEY("id" AUTOINCREMENT));'''
 
@@ -63,8 +67,6 @@ def initDB():
         cursor.execute(sqlCreateTableKeywords)
         sqlConn.commit()
         print("Таблица keywords создана")
-
-
         cursor.close()
 
     except sqlite3.Error as error:
@@ -74,10 +76,53 @@ def initDB():
             sqlConn.close()
             print("Соединение с SQLite закрыто")
 
+def addKeyword(message):
+    userId = message.from_user.id
+    keywords = message.text
+    try:
+        sqlConn = sqlite3.connect('newsBot.db')
+        cursor = sqlConn.cursor()
+        sqlite_insert_with_param = """INSERT INTO keywords
+                                          (keywords, userId)
+                                          VALUES (?, ?);"""
+        data_tuple = (keywords, userId)
+        cursor.execute(sqlite_insert_with_param, data_tuple)
+        sqlConn.commit()
+        print("Запись успешно вставлена в таблицу keywords ", cursor.rowcount)
+        cursor.close()
 
-#registration
-def regNewUser(userId = 124023217):
-    print ('Заглушка', userId)
+    except sqlite3.Error as error:
+        print("Ошибка при работе с SQLite", error)
+    finally:
+        if sqlConn:
+            sqlConn.close()
+            print("Соединение с SQLite закрыто")
+
+
+
+def regNewUser(message):
+    """ registration new user"""
+    userId = message.from_user.id
+    name = message.text
+    try:
+        sqlConn = sqlite3.connect('newsBot.db')
+        cursor = sqlConn.cursor()
+        sqlInsertNewUser = """INSERT INTO users
+                                      (id, name)
+                                      VALUES (?, ?);"""
+        params = (userId, name)
+        cursor.execute(sqlInsertNewUser, params)
+        sqlConn.commit()
+        print("Запись успешно вставлена в таблицу users ", cursor.rowcount)
+        cursor.close()
+
+    except sqlite3.Error as error:
+        print("Ошибка при работе с SQLite", error)
+    finally:
+        if sqlConn:
+            sqlConn.close()
+            print("Соединение с SQLite закрыто")
+
 
 
 #def getNews(userID,categories="дтп",domains="yandex.ru"):
@@ -145,7 +190,7 @@ initDB()
 #bot = telebot.TeleBot("1700154841:AAEqEXDBhc4gZi02t4vttt6ZW5J6xKnYgPM", parse_mode=None)
 
 getNews()
-
+#regNewUser()
 
 #start bot
 #bot.polling()

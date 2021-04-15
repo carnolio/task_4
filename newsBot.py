@@ -10,9 +10,9 @@
 import sqlite3, telebot
 from newsapi import NewsApiClient
 
-botToken = "1700154841:AAEqEXDBhc4gZi02t4vttt6ZW5J6xKnYgPM"
-newsApiKey = "7e40013ca7ea498589545453e4cea074"
-carnolioId = "124023217"
+botToken = ""
+newsApiKey = ""
+
 categoryList = ['business', 'entertainment', 'general', 'health', 'science', 'sports', 'technology']
 
 botHelp = """

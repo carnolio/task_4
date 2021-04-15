@@ -5,53 +5,118 @@
 -Просмотреть/добавить/удалить подписки на категории новостей.
 -Просмотреть/добавить/удалить подписки на ключевые слова.
 -Получение списка из 10 наиболее релевантных новостей по активным подпискам.
-
--Таблица users для хранения зарегистрированных пользователей.
--Таблица categories для хранения списка подписок на категории для каждого пользователя.
--Таблица keywords для хранения списка подписок на ключевые слова для каждого пользователя.
-
-
- bot = telebot.TeleBot("1629080631:AAGJUScNV0kLMcLoges2Frj1xJRhSG6pHzk", parse_mode=None)
-
- @bot.message_handler(commands=['start', 'help'])
- def handle_start_help(message):
-     bot.reply_to(message, "Я пока ничего не умею?")
-
- @bot.message_handler(func=lambda message: True)
- def answer_to_message(message):
-     print(message.from_user.id)
-     if message.text in list_hello:
-         bot.send_message(message.from_user.id, "И тебе привет!")
- bot.polling()
 '''
-import sqlite3, telebot, requests
+
+import sqlite3, telebot
 from newsapi import NewsApiClient
 
 botToken = "1700154841:AAEqEXDBhc4gZi02t4vttt6ZW5J6xKnYgPM"
 newsApiKey = "7e40013ca7ea498589545453e4cea074"
 carnolioId = "124023217"
+categoryList = ['business', 'entertainment', 'general', 'health', 'science', 'sports', 'technology']
 
+botHelp = """
+    /addcat -   добавить категорию 
+    /addkey -   добавить ключ  
+    /delcat -   удалить категорию  
+    /delkey -   удалить ключ  
+    /getcat -   получить список ваших категорий
+    /getcatlist -   получить список возможных категорий
+    /getkey -   получить список ваших ключевых слов  
+    /getnews -  получить 10 новостей в соответствии с набором 
+                категория/ключ 
+    /help -     это сообщение
+    /start -    Зарегистрироваться, глянуть хелп если зарегистрирован
+    """
 #pip3 install PyTelegramBotAPI
+#pip3 install newsapi-python
+
 bot = telebot.TeleBot(botToken, parse_mode = None)
 #bot = telebot.TeleBot(botToken)
+
+
 @bot.message_handler(commands=['start'])
-def start_message(message):
-    if userExist():
-        msg = bot.reply_to(message, "Здравствуйте, представьтесь:")
+def startCommand(message):
+    #print(userExist(message))
+    if userExist(message) == False:
+        #bot.send_message(message.from_user.id, "Введите ваше имя:", parse_mode=None)
+        msg = bot.reply_to(message, "Введите Ваше имя")
         bot.register_next_step_handler(msg, regNewUser)
     else:
-        msg = bot.reply_to(message, "Здравствуйте, представьтесь:")
-        bot.register_next_step_handler(msg, regNewUser)
+        bot.send_message(message.from_user.id, botHelp, parse_mode=None)
 
-@bot.message_handler(commands=['categories'])
-def get_categories(message):
-    msg = bot.reply_to(message, "Категории:")
-    msg = bot.reply_to(message, categoryList[1])
-    #bot.register_next_step_handler(msg, regNewUser)
+@bot.message_handler(commands=['help'])
+def helpCommand(message):
+    msg = bot.reply_to(message, botHelp, parse_mode=None)
 
 
+@bot.message_handler(commands=['getcat'])
+def getCatCommand(message, isPrint = True):
+    '''getcat'''
+    userCats = list()
+    rows = list()
+    try:
+        sqlConn = sqlite3.connect('newsBot.db')
+        cursor = sqlConn.cursor()
+        sqlSelectCats = """SELECT name FROM categories WHERE user_id = ?"""
+        data_tuple = (message.from_user.id,)
+        cursor.execute(sqlSelectCats, data_tuple)
+        rows = cursor.fetchall()
+        sqlConn.commit()
+        cursor.close()
+    except sqlite3.Error as error:
+        error
+    finally:
+        if sqlConn:
+            sqlConn.close()
+        if len(rows) > 0:
+            #print(rows)
+            for item in rows:
+                #print(item[0])
+                userCats.append(item[0])
+                if isPrint:
+                    bot.send_message(message.from_user.id, item[0], parse_mode=None)
+                return userCats
+        else:
+            bot.send_message(message.from_user.id, "Нет подписок на категории", parse_mode=None)
 
-    
+@bot.message_handler(commands=['getcatlist'])
+def getCatListCommand(message):
+    '''getcatlist'''
+    bot.send_message(message.from_user.id, '\n '.join(categoryList), parse_mode=None)
+
+@bot.message_handler(commands=['getkey'])
+def getKeyCommand(message, isPrint = True):
+    '''getkey'''
+    listKeyword = []
+    rows = []
+    try:
+        sqlConn = sqlite3.connect('newsBot.db')
+        cursor = sqlConn.cursor()
+        sqlSelectKeys = """SELECT name FROM keywords WHERE user_id = ?"""
+        data_tuple = (message.from_user.id,)
+        cursor.execute(sqlSelectKeys, data_tuple)
+        rows = cursor.fetchall()
+        sqlConn.commit()
+        cursor.close()
+    except sqlite3.Error as error:
+        error
+    finally:
+        if sqlConn:
+            sqlConn.close()
+        if len(rows) > 0:
+            for item in rows:
+                listKeyword.append(item[0])
+            if isPrint:
+                bot.send_message(message.from_user.id, '\n '.join(listKeyword), parse_mode=None)
+            return listKeyword
+        else:
+            bot.send_message(message.from_user.id, "Нет ключевых слов", parse_mode=None)
+
+
+
+
+
 def initDB():
     """Подключение к БД и создание таблиц"""
     try:
@@ -73,79 +138,198 @@ def initDB():
                                     "user_id"	INTEGER NOT NULL,
                                     PRIMARY KEY("id" AUTOINCREMENT)
                                 );'''
-
         cursor = sqlConn.cursor()
-        print("База данных подключена к SQLite")
         cursor.execute(sqlCreateTableUsers)
         sqlConn.commit()
-        print("Таблица users создана")
-
         cursor.execute(sqlCreateTableCategories)
         sqlConn.commit()
-        print("Таблица categories создана")
-
         cursor.execute(sqlCreateTableKeywords)
         sqlConn.commit()
-        print("Таблица keywords создана")
         cursor.close()
 
     except sqlite3.Error as error:
-        print("Ошибка при подключении к БД>", error)
+        error
+
     finally:
         if (sqlConn):
             sqlConn.close()
-            print("Соединение с SQLite закрыто")
 
-def addKeyword(message):
+def keyExist(key,userId):
+    rows = list()
+    '''if key exist'''
+    #print("Ищем дубликаты ключей")
+    sqlConn = sqlite3.connect('newsBot.db')
+    cursor = sqlConn.cursor()
+    sqlSelectKeys = """SELECT * FROM keywords WHERE user_id = ? and name = ?"""
+    data_tuple = (userId,key)
+    cursor.execute(sqlSelectKeys, data_tuple)
+    #print(cursor.execute(sqlSelectKeys, data_tuple))
+    rows = cursor.fetchall()
+    sqlConn.commit()
+    cursor.close()
+
+    if len(rows) > 0:
+        return True
+    else:
+        return False
+
+def catExist(cat,userId):
+    rows = list()
+    '''if key exist'''
+
+    sqlConn = sqlite3.connect('newsBot.db')
+    cursor = sqlConn.cursor()
+    sqlSelectCats = """SELECT name FROM categories WHERE user_id = ? and name = ?"""
+    data_tuple = (userId,cat)
+    cursor.execute(sqlSelectCats, data_tuple)
+    rows = cursor.fetchall()
+    sqlConn.commit()
+    cursor.close()
+    #print(rows)
+    if len(rows) > 0:
+        #print("cat exist",rows)
+        return True
+    else:
+        return False
+
+
+@bot.message_handler(commands=['addkey'])
+def addKeycommand(message):
     '''add keywords to user'''
-    userId = message.from_user.id
-    keywords = message.text.split()
-    print(keywords)
+    # message.from_user.id
+    keyForAdd = message.text.split()
+    #print('\n '.join(keyForAdd))
 
     try:
         sqlConn = sqlite3.connect('newsBot.db')
-        cursor = sqlConn.cursor()
-
-        sqlite_insert_with_param = "INSERT INTO keywords (name, user_Id) VALUES (?, ?);"
-        data_tuple = (keywords, userId)
-        cursor.execute(sqlite_insert_with_param, data_tuple)
+        sqlInsertKey = "INSERT INTO keywords (name, user_id) VALUES (?, ?);"
+        for key in range(1,len(keyForAdd)):
+            #print("пытаемся добавить", keyForAdd[key])
 
 
-        sqlConn.commit()
-        print("Запись успешно вставлена в таблицу keywords ", cursor.rowcount)
-        cursor.close()
-
+            if keyForAdd[key] != "/addkey" and keyExist(keyForAdd[key], message.from_user.id) == False:
+                cursor = sqlConn.cursor()
+                data_tuple = (keyForAdd[key], message.from_user.id)
+                cursor.execute(sqlInsertKey, data_tuple)
+                sqlConn.commit()
+                cursor.close()
+                msg = keyForAdd[key] + "- ключ добавлен"
+            else:
+                msg = "Такой ключ уже есть"
+            bot.send_message(message.from_user.id, msg, parse_mode=None)
     except sqlite3.Error as error:
         print("Ошибка при работе с SQLite", error)
     finally:
         if sqlConn:
             sqlConn.close()
-            print("Соединение с SQLite закрыто")
 
-def addCategories(message):
+@bot.message_handler(commands=['addcat'])
+def addCatCommand(message):
     '''add categories to user'''
+    catForAdd = message.text.split()
+    #print('\n '.join(catForAdd))
+
+    try:
+        sqlConn = sqlite3.connect('newsBot.db')
+        sqlInsertCategory = "INSERT INTO categories (name, user_id) VALUES (?, ?);"
+        for cat in range(1,len(catForAdd)):
+            #если категория из списка то добавляем
+            #print(catForAdd[cat])
+            if catForAdd[cat] in categoryList and catForAdd[cat] != "/addcat" and catExist(catForAdd[cat],message.from_user.id) == False:
+                cursor = sqlConn.cursor()
+                data_tuple = (catForAdd[cat], message.from_user.id)
+                cursor.execute(sqlInsertCategory, data_tuple)
+                sqlConn.commit()
+                cursor.close()
+                msg = catForAdd[cat] + " добавлена"
+            elif catExist(catForAdd[cat],message.from_user.id):
+                msg = catForAdd[cat] + " уже в вашем списке"
+            else:
+                msg = catForAdd[cat] + " такой категории нет"
+            bot.send_message(message.from_user.id, msg, parse_mode=None)
+    except sqlite3.Error as error:
+        print("Ошибка при работе с SQLite", error)
+    finally:
+        if sqlConn:
+            sqlConn.close()
+
+@bot.message_handler(commands=['delcat'])
+def delCatCommand(message):
+    '''delcat'''
+    catForDel = message.text.split()
+    #print('\n '.join(catForDel))
+
+    try:
+        sqlConn = sqlite3.connect('newsBot.db')
+        sqlDelCategory = "DELETE FROM categories where name = ? and user_id = ?;"
+        for cat in range(1,len(catForDel)):
+            #print(catForDel[cat])
+            if catForDel[cat] in categoryList and catForDel[cat] != "/delcat" and catExist(catForDel[cat],message.from_user.id) == True:
+                cursor = sqlConn.cursor()
+                data_tuple = (catForDel[cat], message.from_user.id)
+                cursor.execute(sqlDelCategory, data_tuple)
+                sqlConn.commit()
+                cursor.close()
+                msg = catForDel[cat] + " удалена"
+            else:
+                msg = catForDel[cat] + " такой категории нет"
+            bot.send_message(message.from_user.id, msg, parse_mode=None)
+    except sqlite3.Error as error:
+        print("Ошибка при работе с SQLite", error)
+    finally:
+        if sqlConn:
+            sqlConn.close()
+
+
+@bot.message_handler(commands=['delkey'])
+def delKeyCommand(message):
+    '''delkey'''
+    keyForDel = message.text.split()
+    #print('\n '.join(keyForDel))
+
+    try:
+        sqlConn = sqlite3.connect('newsBot.db')
+        sqlDelKey = """DELETE FROM keywords WHERE name = ? AND user_id = ?"""
+        for key in range(1,len(keyForDel)):
+            if keyForDel[key] != "/delkey" and keyExist(keyForDel[key], message.from_user.id) == True:
+                cursor = sqlConn.cursor()
+                data_tuple = (keyForDel[key], message.from_user.id)
+                cursor.execute(sqlDelKey, data_tuple)
+                sqlConn.commit()
+                cursor.close()
+                msg = keyForDel[key] + " ключ удален"
+            else:
+                msg = keyForDel[key] + " Такого ключа нет"
+            bot.send_message(message.from_user.id, msg, parse_mode=None)
+    except sqlite3.Error as error:
+        print("Ошибка при работе с SQLite", error)
+    finally:
+        if sqlConn:
+            sqlConn.close()
+
+
+def userExist(message):
     userId = message.from_user.id
-    categoties = message.text
     try:
         sqlConn = sqlite3.connect('newsBot.db')
         cursor = sqlConn.cursor()
-
-
-        sqlInsertCategory = "INSERT INTO categories (name, user_id) VALUES (?, ?);"
-        data_tuple = (category, userId)
-        cursor.execute(sqlInsertCategory, data_tuple)
+        sqlSelectUser = """SELECT * FROM users WHERE ID = ?;"""
+        params = (userId,)
+        cursor.execute(sqlSelectUser, params)
+        rows = cursor.fetchall()
         sqlConn.commit()
-        print("Запись успешно вставлена в таблицу categories ", cursor.rowcount)
         cursor.close()
+        if len(rows) > 0:
+            #print(rows)
+            return True
+        else:
+            return False
 
     except sqlite3.Error as error:
         print("Ошибка при работе с SQLite", error)
     finally:
         if sqlConn:
             sqlConn.close()
-            print("Соединение с SQLite закрыто")
-
-
 
 
 def regNewUser(message):
@@ -159,83 +343,63 @@ def regNewUser(message):
         params = (userId, name)
         cursor.execute(sqlInsertNewUser, params)
         sqlConn.commit()
-        print("Запись успешно вставлена в таблицу users ", cursor.rowcount)
         cursor.close()
-
+        msg="Пользователь "+name+" зарегистрирован"
+        bot.send_message(message.from_user.id, msg, parse_mode=None)
     except sqlite3.Error as error:
         print("Ошибка при работе с SQLite", error)
     finally:
         if sqlConn:
             sqlConn.close()
-            print("Соединение с SQLite закрыто")
 
 
 
-#def getNews(userID,categories="дтп",domains="yandex.ru"):
-def getNews(keyWord="Рос", domains="yandex.ru"):
-    #get all sources of news support country/category
-    #https://newsapi.org/v2/sources?apiKey=newsApiKey&q=Россия&country=ru&language=ru
-    #https://newsapi.org/v2/sources?apiKey=newsApiKey&q=Россия&country=ru&language=ru
-    #everything
-    #https://newsapi.org/v2/everything?apiKey=<api_key>&q=Россия&country=ru&language=ru
 
 
-    #status string
-    #If the request was successful or not. Options: ok, error. In the case of error a code and message property will be populated.
+@bot.message_handler(commands=['getnews'])
+def getNewsCommand(message):
+    listKeywords = getKeyCommand(message,isPrint=False)
+    listCategory = getCatCommand(message,isPrint=False)
+    listSources = []
+    listNews = []
 
-    # Init
     newsapi = NewsApiClient(api_key=newsApiKey)
-    #get sources
-    sources = newsapi.get_sources()
-    print("src:",sources)
-
-    top_headlines = newsapi.get_top_headlines( #q='bitcoin',
-                                              sources='abc-news',
-                                              #category='business',
-                                              language='en')
-                                              #country='us')Ы
-
-    newsList = []
-
-    #apiKey = "7e40013ca7ea498589545453e4cea074"
-    #categories = "Россия"
-    #domains = "yandex.ru"
-    #requestNews = f"https://newsapi.org/v2/everything?q={categories}&domains={domains}&sortBy=publishedAt&apiKey={apiKey}"
-    #print(requestNews)
-    #response = requests.get(requestNews)
-    #response = response.json()
-
-    '''
-    #only top10
-    if len(response["articles"]) < 10:
-        newsCount = len(response["articles"])
+    #sources = newsapi.get_sources()
+    if len(listCategory) > 0:
+        for category in listCategory:
+            sources = newsapi.get_sources(category=category)
+            for source in sources['sources']:
+                listSources.append(source['id'])
+        response = newsapi.get_everything(q=' OR '.join(listKeywords), sources=','.join(listSources),
+                                          sort_by='relevancy', page_size=10)
+    elif len(listKeywords) > 0:
+        response = newsapi.get_everything(q=' OR '.join(listKeywords), sort_by='relevancy', page_size=10)
     else:
-        newsCount = 10
+        response = {"articles": []}
 
-    for i in range(newsCount):
-        newsList.append({
-            "title": response["articles"][i]["title"],
-            "description": response["articles"][i]["description"],
-            "url": response["articles"][i]["url"],
-            "urlToImage": response["articles"][i]["urlToImage"],
-            "publishedAt": response["articles"][i]["publishedAt"],
-            "content": response["articles"][i]["content"],
-        })
-    '''
-    #return newsList
-    print (top_headlines)
+    if len(response["articles"]) < 10:
+        count_news = len(response["articles"])
+    else:
+        count_news = 10
+    if len(response["articles"]) > 0:
+        for i in range(count_news):
+            listNews.append({
+                "title": response["articles"][i]["title"],
+                "description": response["articles"][i]["description"],
+                "url": response["articles"][i]["url"],
+                "publishedAt": response["articles"][i]["publishedAt"],
+            })
+    #return listNews
+    else:
+        bot.send_message(message.from_user.id, "По такой выборке данных не найдено")
 
-
-categoryList=['business', 'entertainment', 'general', 'health', 'science', 'sports', 'technology']
-language = 'ru'
-country = 'ru'
+    for i in range(len(listNews)):
+        title = listNews[i]["title"]
+        description = listNews[i]["description"]
+        url = listNews[i]["url"]
+        publishedAt = listNews[i]["publishedAt"]
+        bot.send_message(message.from_user.id,
+                         f"{title}\n\n{description}\n{url}\n{publishedAt}",disable_web_page_preview=True)
 
 initDB()
-#authorization
-
-
-getNews()
-#regNewUser()
-
-#start bot
 bot.polling()
